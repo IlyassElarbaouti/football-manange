@@ -20,13 +20,22 @@ import {
 } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns'; // Update import to use direct import
-import { Loader2, Clock, Calendar as CalendarIcon } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { format } from 'date-fns';
+import { Loader2, Clock, Calendar as CalendarIcon, Eye, EyeOff, Key, RefreshCw, Copy, Check } from 'lucide-react';
 import VenueSelector from '@/components/matches/VenueSelector';
+import { useToast } from '@/hooks/use-toast';
+import { generateInviteCode } from '@/lib/invite-code-generator';
 
 export default function CreateMatchPage() {
   const router = useRouter();
   const { user } = useUser();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState('19:00');
@@ -36,7 +45,10 @@ export default function CreateMatchPage() {
     totalSlots: 10,
     venue: '',
     notes: '',
+    visibility: 'public',
+    inviteCode: generateInviteCode(),
   });
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -47,11 +59,31 @@ export default function CreateMatchPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const regenerateInviteCode = () => {
+    setFormData(prev => ({ ...prev, inviteCode: generateInviteCode() }));
+  };
+
+  const copyInviteCode = () => {
+    navigator.clipboard.writeText(formData.inviteCode);
+    setCodeCopied(true);
+    
+    toast({
+      title: "Code copied to clipboard",
+      description: "You can share this with others to join your match",
+    });
+    
+    setTimeout(() => setCodeCopied(false), 3000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedDate || !formData.venue) {
-      // Show validation error
+      toast({
+        title: "Missing required fields",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -62,6 +94,9 @@ export default function CreateMatchPage() {
       const matchDate = new Date(selectedDate);
       const [hours, minutes] = selectedTime.split(':').map(Number);
       matchDate.setHours(hours, minutes);
+      
+      // Only include invite code for invite-only matches
+      const inviteCode = formData.visibility === 'invite' ? formData.inviteCode : undefined;
       
       // Prepare match data
       const matchData = {
@@ -79,6 +114,8 @@ export default function CreateMatchPage() {
           _ref: '', // Will be filled on the server with Sanity user ID
         },
         notes: formData.notes,
+        visibility: formData.visibility,
+        inviteCode,
       };
       
       // Send to API
@@ -91,17 +128,27 @@ export default function CreateMatchPage() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to create match');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create match');
       }
       
       const data = await response.json();
+      
+      toast({
+        title: "Match created successfully",
+        description: "Your match has been scheduled",
+      });
       
       // Redirect to match details page
       router.push(`/dashboard/matches/${data.match._id}`);
       router.refresh();
     } catch (error) {
       console.error('Error creating match:', error);
-      // Show error notification
+      toast({
+        title: "Failed to create match",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -233,6 +280,113 @@ export default function CreateMatchPage() {
                     Including yourself
                   </p>
                 </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="visibility" className="text-white">
+                    Match Visibility
+                  </Label>
+                  <Select
+                    value={formData.visibility}
+                    onValueChange={(value) => handleSelectChange('visibility', value)}
+                  >
+                    <SelectTrigger
+                      id="visibility"
+                      className="border-amber-500/20 bg-gray-800/50 text-white focus:border-amber-400"
+                    >
+                      <SelectValue placeholder="Select visibility" />
+                    </SelectTrigger>
+                    <SelectContent className="border-amber-500/20 bg-gray-900">
+                      <SelectItem value="public">
+                        <div className="flex items-center">
+                          <Eye className="mr-2 h-4 w-4 text-green-400" />
+                          <span>Public (Anyone can join)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="invite">
+                        <div className="flex items-center">
+                          <Key className="mr-2 h-4 w-4 text-amber-400" />
+                          <span>Invite Only (Requires code)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="private">
+                        <div className="flex items-center">
+                          <EyeOff className="mr-2 h-4 w-4 text-red-400" />
+                          <span>Private (Creator only)</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-amber-400/80">
+                    Controls who can see and join your match
+                  </p>
+                </div>
+                
+                {/* Invite Code Field - Only shown for invite-only matches */}
+                {formData.visibility === 'invite' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="inviteCode" className="text-white">
+                      Invitation Code
+                    </Label>
+                    <div className="flex">
+                      <div className="relative flex-1">
+                        <Input
+                          id="inviteCode"
+                          name="inviteCode"
+                          value={formData.inviteCode}
+                          onChange={handleInputChange}
+                          className="border-amber-500/20 bg-gray-800/50 text-white pr-20 focus:border-amber-400"
+                          readOnly
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center space-x-1 pr-3">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 text-white/70 hover:text-amber-400"
+                                  onClick={regenerateInviteCode}
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Generate new code</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 text-white/70 hover:text-amber-400"
+                                  onClick={copyInviteCode}
+                                >
+                                  {codeCopied ? (
+                                    <Check className="h-4 w-4 text-green-400" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Copy code</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-amber-400/80">
+                      Share this code with players you want to invite
+                    </p>
+                  </div>
+                )}
                 
                 <div className="space-y-2 md:col-span-2">
                   <Label className="text-white">

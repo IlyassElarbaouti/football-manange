@@ -1,4 +1,5 @@
-export default {
+// lib/sanity/schemas/match.ts
+ const match = {
   name: 'match',
   title: 'Match',
   type: 'document',
@@ -144,6 +145,33 @@ export default {
       description: 'List of players and their status',
     },
     {
+      name: 'queue',
+      title: 'Waiting Queue',
+      type: 'array',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            {
+              name: 'user',
+              title: 'User',
+              type: 'reference',
+              to: [{type: 'user'}],
+              validation: Rule => Rule.required(),
+            },
+            {
+              name: 'timestamp',
+              title: 'Joined At',
+              type: 'datetime',
+              description: 'When user joined the queue',
+              validation: Rule => Rule.required(),
+            },
+          ],
+        },
+      ],
+      description: 'Users waiting to join if spots become available',
+    },
+    {
       name: 'weather',
       title: 'Weather',
       type: 'object',
@@ -173,6 +201,26 @@ export default {
       type: 'text',
       description: 'Additional match information',
     },
+    {
+      name: 'visibility',
+      title: 'Visibility',
+      type: 'string',
+      options: {
+        list: [
+          {title: 'Public', value: 'public'},
+          {title: 'Invite Only', value: 'invite'},
+          {title: 'Private', value: 'private'},
+        ],
+      },
+      description: 'Who can see and join this match',
+      initialValue: 'public',
+    },
+    {
+      name: 'inviteCode',
+      title: 'Invite Code',
+      type: 'string',
+      description: 'Code for invite-only matches',
+    },
   ],
   preview: {
     select: {
@@ -189,3 +237,5 @@ export default {
     },
   },
 }
+
+export default match

@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import moment from "moment";
 import { useRouter } from "next/navigation";
@@ -8,8 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MapPin, Calendar,  Users, Search, AlertCircle } from "lucide-react";
-
+import { MapPin, Calendar, Clock, Users, Search, AlertCircle,  ArrowUpDown, UserPlus, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -18,17 +25,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { Match } from "@/types/sanity";
+import { Match, User } from "@/types/sanity";
+import { useToast } from "@/hooks/use-toast";
+import QuickFilterTabs from "@/components/matches/QuickFilterTabs";
 
 interface MatchesDataGridProps {
   matches: Match[];
+  currentUser?: User | null;
+  showMyMatchesOnly?: boolean;
 }
 
-export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
+export default function MatchesDataGrid({ 
+  matches, 
+  currentUser,
+  showMyMatchesOnly = false
+}: MatchesDataGridProps) {
   const router = useRouter();
+  const { toast } = useToast();
+  const [displayedMatches, setDisplayedMatches] = useState<Match[]>(matches);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [joinInProgress, setJoinInProgress] = useState<string | null>(null);
+  const [quickJoinCode, setQuickJoinCode] = useState("");
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [sortOption, setSortOption] = useState("date-asc");
+
+  // Handle filter changes from QuickFilterTabs
+  const handleFilteredMatchesChange = (filteredMatches: Match[]) => {
+    setDisplayedMatches(filteredMatches);
+  };
 
   // Get all unique match types from the data
   const matchTypes = Array.from(
@@ -41,29 +68,64 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
   );
 
   // Filter matches based on type, status and search term
-  const filteredMatches = matches.filter((match) => {
-    const matchesType =
-      !selectedType || selectedType === "all"
-        ? true
-        : match.matchType === selectedType;
+  useEffect(() => {
+    // First handle "my matches only" filter if enabled
+    let filtered = [...matches];
     
-    const matchesStatus =
-      !selectedStatus || selectedStatus === "all"
-        ? true
-        : match.status === selectedStatus;
+    if (showMyMatchesOnly && currentUser) {
+      filtered = filtered.filter(match => {
+        const isUserInvolved = 
+          match.players?.some(player => player.user._ref === currentUser._id) || 
+          match.createdBy?._ref === currentUser._id ||
+          match.queue?.some(queueItem => queueItem.user._ref === currentUser._id);
+        
+        return isUserInvolved;
+      });
+    }
     
-    const matchesSearch = searchTerm
-      ? match.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (match.venue &&
-          typeof match.venue === "object" &&
-          "name" in match.venue &&
-          match.venue.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (match.createdBy?.name &&
-          match.createdBy.name.toLowerCase().includes(searchTerm.toLowerCase()))
-      : true;
+    // Then apply other filters
+    filtered = filtered.filter(match => {
+      const matchesType =
+        !selectedType || selectedType === "all"
+          ? true
+          : match.matchType === selectedType;
+      
+      const matchesStatus =
+        !selectedStatus || selectedStatus === "all"
+          ? true
+          : match.status === selectedStatus;
+      
+      const matchesSearch = searchTerm
+        ? match.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (match.venue &&
+            typeof match.venue === "object" &&
+            "name" in match.venue &&
+            match.venue.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (match.createdBy?.name &&
+            match.createdBy.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : true;
 
-    return matchesType && matchesStatus && matchesSearch;
-  });
+      return matchesType && matchesStatus && matchesSearch;
+    });
+
+    // Sort matches
+    filtered.sort((a, b) => {
+      switch (sortOption) {
+        case "date-asc":
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        case "date-desc":
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        case "slots-asc":
+          return (a.filledSlots / a.totalSlots) - (b.filledSlots / b.totalSlots);
+        case "slots-desc":
+          return (b.filledSlots / b.totalSlots) - (a.filledSlots / b.totalSlots);
+        default:
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+      }
+    });
+
+    setDisplayedMatches(filtered);
+  }, [matches, currentUser, showMyMatchesOnly, selectedType, selectedStatus, searchTerm, sortOption]);
 
   // Function to get status styling
   const getStatusStyles = (status: string) => {
@@ -155,8 +217,128 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
     }
   };
 
-  // Group matches by status
-  const matchesByStatus = filteredMatches.reduce((acc, match) => {
+  // Handle quick join by code
+  const handleQuickJoin = async () => {
+    if (!currentUser) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to join matches",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!quickJoinCode.trim()) {
+      toast({
+        title: "No code entered",
+        description: "Please enter a match invitation code",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      // Call the API to find match by code
+      const response = await fetch(`/api/matches/by-code/${quickJoinCode}`);
+      
+      if (!response.ok) {
+        throw new Error('Invalid match code');
+      }
+      
+      const data = await response.json();
+      
+      if (data.match) {
+        router.push(`/dashboard/matches/${data.match._id}`);
+      }
+    } catch (error) {
+      toast({
+        title: "Failed to join match",
+        description: "The code you entered is invalid or expired",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle joining a match directly from the list
+  const handleJoinMatch = async (match: Match) => {
+    if (!currentUser) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to join matches",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setJoinInProgress(match._id);
+    setSelectedMatch(match);
+    
+    // Check if match is full
+    const isFull = match.filledSlots >= match.totalSlots;
+    
+    // Determine if user should join directly or go to waiting list
+    const endpoint = isFull 
+      ? `/api/matches/${match._id}/queue` 
+      : `/api/matches/${match._id}/join`;
+    
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUser._id,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to join match');
+      }
+      
+      // Show success message
+      toast({
+        title: isFull ? "Added to waiting list" : "Successfully joined match",
+        description: isFull 
+          ? "You'll be notified if a spot becomes available" 
+          : "You've been added to the match",
+        variant: "default",
+      });
+      
+      // Refresh the page
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Failed to join match",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setJoinInProgress(null);
+    }
+  };
+
+  // Check if user is already in a match
+  const isUserInMatch = (match: Match): boolean => {
+    if (!currentUser) return false;
+    
+    return !!match.players?.some(player => 
+      player.user._ref === currentUser._id
+    );
+  };
+
+  // Check if user is in the waiting queue
+  const isUserInQueue = (match: Match): boolean => {
+    if (!currentUser) return false;
+    
+    return !!match.queue?.some(queueItem => 
+      queueItem.user._ref === currentUser._id
+    );
+  };
+
+  // Group matches by status for display
+  const matchesByStatus = displayedMatches.reduce((acc, match) => {
     if (!acc[match.status]) {
       acc[match.status] = [];
     }
@@ -192,9 +374,7 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
           asChild
           className="bg-gradient-to-r from-amber-500 to-yellow-500 font-bold text-black shadow-md shadow-amber-500/20 hover:from-amber-600 hover:to-yellow-600"
         >
-          <Link href="/dashboard/matches/create">
-            Schedule Your First Match
-          </Link>
+          <Link href="/dashboard/matches/create">Schedule Your First Match</Link>
         </Button>
       </div>
     );
@@ -202,6 +382,12 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
 
   return (
     <div className="space-y-8">
+      {/* Quick Filter Tabs */}
+      <QuickFilterTabs 
+        matches={matches}
+        onFilteredMatchesChange={handleFilteredMatchesChange}
+      />
+      
       {/* Search and Filter Bar */}
       <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4 sm:items-center">
         <div className="relative flex-1">
@@ -260,6 +446,52 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
               })}
             </SelectContent>
           </Select>
+          
+          <Select
+            value={sortOption}
+            onValueChange={setSortOption}
+          >
+            <SelectTrigger className="w-[140px] border-amber-500/20 bg-gray-800/50 text-white focus:border-amber-400">
+              <ArrowUpDown className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent className="border-amber-500/20 bg-gray-900">
+              <SelectItem value="date-asc">Date (ascending)</SelectItem>
+              <SelectItem value="date-desc">Date (descending)</SelectItem>
+              <SelectItem value="slots-asc">Most available</SelectItem>
+              <SelectItem value="slots-desc">Most filled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      
+      {/* Quick Join Bar */}
+      <div className="flex flex-wrap items-center gap-4 bg-black/20 p-4 rounded-lg border border-amber-500/10">
+        <div className="flex items-center">
+          <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/30 mr-2">
+            <UserPlus className="mr-1 h-3 w-3" />
+            Quick Join
+          </Badge>
+          <span className="text-white text-sm">Enter a match code:</span>
+        </div>
+        
+        <div className="flex flex-1 max-w-xs">
+          <Input
+            value={quickJoinCode}
+            onChange={(e) => setQuickJoinCode(e.target.value)}
+            placeholder="Enter code..."
+            className="mr-2 border-amber-500/20 bg-gray-800/50 text-white"
+          />
+          <Button
+            onClick={handleQuickJoin}
+            className="bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold hover:from-amber-600 hover:to-yellow-600"
+          >
+            Join
+          </Button>
+        </div>
+        
+        <div className="flex-1 text-white/60 text-sm">
+          Match codes can be found in invitations or from match organizers
         </div>
       </div>
       
@@ -309,11 +541,17 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
                 
                 // Set opacity based on match status
                 const cardOpacity = match.status === 'cancelled' ? 'opacity-80' : 'opacity-100';
+                
+                // Check if user is already in the match or queue
+                const userJoined = isUserInMatch(match);
+                const userInQueue = isUserInQueue(match);
+                
+                // Check if match is full
+                const isFull = match.filledSlots >= match.totalSlots;
 
                 return (
                   <div
                     key={match._id}
-                    onClick={() => router.push(`/dashboard/matches/${match._id}`)}
                     className={`rounded-lg border ${statusStyles.border} overflow-hidden transition-all cursor-pointer hover:shadow-lg ${cardOpacity} group`}
                     style={{
                       backgroundImage: `linear-gradient(to bottom right, rgba(0,0,0,0.8), rgba(0,0,0,0.95))`,
@@ -348,7 +586,7 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
                     </div>
                     
                     {/* Match Content */}
-                    <div className="p-4">
+                    <div onClick={() => router.push(`/dashboard/matches/${match._id}`)} className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-lg font-bold text-white group-hover:text-amber-300 transition-colors">{match.title}</h3>
                         
@@ -413,6 +651,13 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
                             )}
                           </div>
                         </div>
+                        
+                        {/* Queue count if exists */}
+                        {match.queue && match.queue.length > 0 && (
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-300 border-amber-500/20">
+                            {match.queue.length} waiting
+                          </Badge>
+                        )}
                       </div>
                       
                       {/* Special alerts for certain statuses */}
@@ -423,19 +668,64 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
                         </div>
                       )}
                       
-                      {/* Action Button - style based on status */}
-                      <Button
-                        asChild
-                        className={`w-full mt-4 bg-gradient-to-r ${statusStyles.gradient} text-xs font-bold text-white shadow-sm`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/dashboard/matches/${match._id}`);
-                        }}
-                      >
-                        <Link href={`/dashboard/matches/${match._id}`}>
-                          View Details
-                        </Link>
-                      </Button>
+                      {/* Action Buttons */}
+                      <div className="flex justify-between mt-4 gap-2">
+                        {/* View Details Button */}
+                        <Button
+                          asChild
+                          variant="outline"
+                          className="flex-1 bg-gray-800/30 border-amber-500/20 text-white hover:bg-gray-800/50 hover:text-amber-400"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dashboard/matches/${match._id}`);
+                          }}
+                        >
+                          <Link href={`/dashboard/matches/${match._id}`}>
+                            View Details
+                          </Link>
+                        </Button>
+                        
+                        {/* Quick Join/Leave Button - Only for scheduled matches */}
+                        {match.status === 'scheduled' && currentUser && (
+                          userJoined ? (
+                            // User is already in the match - show this is your match
+                            <Badge className="h-9 flex items-center font-normal bg-green-500/20 text-green-300 border-green-500/30">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 12l5 5L20 7" />
+                              </svg>
+                              Joined
+                            </Badge>
+                          ) : userInQueue ? (
+                            // User is in the waiting queue
+                            <Badge className="h-9 flex items-center font-normal bg-amber-500/20 text-amber-300 border-amber-500/30">
+                              <Clock className="mr-1 h-4 w-4" />
+                              In Queue
+                            </Badge>
+                          ) : (
+                            // User can join the match
+                            <Button
+                              className={`${
+                                isFull
+                                  ? "bg-amber-700 hover:bg-amber-800"
+                                  : "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600"
+                              } text-black font-bold`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleJoinMatch(match);
+                              }}
+                              disabled={joinInProgress === match._id}
+                            >
+                              {joinInProgress === match._id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : isFull ? (
+                                "Join Queue"
+                              ) : (
+                                "Quick Join"
+                              )}
+                            </Button>
+                          )
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -447,8 +737,65 @@ export default function MatchesDataGrid({ matches }: MatchesDataGridProps) {
 
       {/* Results count */}
       <div className="text-sm text-white/60">
-        Showing {filteredMatches.length} of {matches.length} matches
+        Showing {displayedMatches.length} of {matches.length} matches
       </div>
+      
+      {/* Quick Join Dialog */}
+      <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
+        <DialogContent className="border-amber-500/20 bg-gray-900">
+          <DialogHeader>
+            <DialogTitle className="text-white">Join Match</DialogTitle>
+            <DialogDescription className="text-white/70">
+              {selectedMatch && selectedMatch.filledSlots >= selectedMatch.totalSlots 
+                ? "This match is full. Would you like to join the waiting list?"
+                : "Confirm that you want to join this match"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedMatch && (
+            <div className="flex flex-col space-y-4 py-4">
+              <div className="rounded-lg bg-black/50 p-4 border border-amber-500/20">
+                <h3 className="font-bold text-amber-400 mb-2">{selectedMatch.title}</h3>
+                <div className="flex items-center text-white/70 text-sm">
+                  <Calendar className="mr-2 h-4 w-4 text-amber-500" />
+                  {moment(selectedMatch.date).format('dddd, MMMM D, YYYY')} at {moment(selectedMatch.date).format('h:mm A')}
+                </div>
+                
+                <div className="flex items-center text-white/70 text-sm mt-2">
+                  <Users className="mr-2 h-4 w-4 text-amber-500" />
+                  {selectedMatch.filledSlots}/{selectedMatch.totalSlots} players joined
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowJoinDialog(false)}
+              className="border-amber-500/20 bg-gray-800/50 text-white hover:bg-gray-800 hover:text-amber-400"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!selectedMatch || !currentUser || joinInProgress === selectedMatch._id}
+              onClick={() => selectedMatch && handleJoinMatch(selectedMatch)}
+              className="bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-bold hover:from-amber-600 hover:to-yellow-600"
+            >
+              {joinInProgress === selectedMatch?._id ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : selectedMatch && selectedMatch.filledSlots >= selectedMatch.totalSlots ? (
+                "Join Waiting List"
+              ) : (
+                "Join Match"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

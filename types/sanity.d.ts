@@ -28,44 +28,54 @@ export interface User {
   }
   
   // Interface for Match document
-  export interface Match {
-    _id: string;
-    _type: 'match';
-    title: string;
-    date: string;
-    venue: {
+ // types/sanity.d.ts - Updated Match interface
+export interface Match {
+  _id: string;
+  _type: 'match';
+  title: string;
+  date: string;
+  venue: {
+    _ref: string;
+    _type: 'reference';
+  };
+  matchType: string;
+  totalSlots: number;
+  filledSlots: number;
+  totalCost?: number;
+  costPerPlayer?: number;
+  status: string;
+  createdBy?: {
+    _ref: string;
+    _type: 'reference';
+  };
+  players?: {
+    _key: string;
+    user: {
       _ref: string;
       _type: 'reference';
     };
-    matchType: string;
-    totalSlots: number;
-    filledSlots: number;
-    totalCost?: number;
-    costPerPlayer?: number;
-    status: string;
-    createdBy?: {
+    confirmed: boolean;
+    hasPaid: boolean;
+    paymentAmount?: number;
+    assignedPosition?: string;
+  }[];
+  queue?: {
+    _key: string;
+    user: {
       _ref: string;
       _type: 'reference';
     };
-    players?: {
-      _key: string;
-      user: {
-        _ref: string;
-        _type: 'reference';
-      };
-      confirmed: boolean;
-      hasPaid: boolean;
-      paymentAmount?: number;
-      assignedPosition?: string;
-    }[];
-    weather?: {
-      forecast?: string;
-      temperature?: number;
-      chanceOfRain?: number;
-    };
-    notes?: string;
-  }
-  
+    timestamp: string;
+  }[];
+  weather?: {
+    forecast?: string;
+    temperature?: number;
+    chanceOfRain?: number;
+  };
+  notes?: string;
+  visibility?: 'public' | 'invite' | 'private';
+  inviteCode?: string;
+}
   // Interface for Venue document
   export interface Venue {
     _id: string;
