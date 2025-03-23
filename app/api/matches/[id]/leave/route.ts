@@ -1,16 +1,15 @@
+// app/api/matches/[id]/leave/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@sanity/client';
 import { getMatchById } from '@/lib/sanity/utils';
+import { processMatchQueue } from '@/lib/match-queue-processor';
 
 // Create a server-side Sanity client with the token
 const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID;
 const dataset = process.env.NEXT_PUBLIC_SANITY_DATASET || 'production';
 const apiVersion = process.env.NEXT_PUBLIC_SANITY_API_VERSION || '2023-05-03';
 const token = process.env.SANITY_API_TOKEN;
-
-// Log token presence for debugging
-console.log(`SANITY_API_TOKEN present in leave match API: ${!!token}`);
 
 const client = createClient({
   projectId,
@@ -40,17 +39,6 @@ export async function POST(
     const matchId = params.id;
     console.log(`Match ID: ${matchId}`);
     
-    // Get the match from Sanity
-    const match = await getMatchById(matchId);
-    
-    if (!match) {
-      console.log('Match not found');
-      return NextResponse.json(
-        { error: 'Match not found' },
-        { status: 404 }
-      );
-    }
-    
     // Parse the request body
     const body = await request.json();
     console.log('Request body:', JSON.stringify(body, null, 2));
@@ -65,45 +53,76 @@ export async function POST(
       );
     }
     
-    // Check if user is the creator
-    const isCreator = match.createdBy?._id === userSanityId;
-    
-    if (isCreator) {
-      console.log('Match creator cannot leave the match');
-      return NextResponse.json(
-        { error: 'Match creator cannot leave the match. Please cancel the match instead.' },
-        { status: 400 }
-      );
-    }
-    
-    // Check if user is actually a player
-    const playerIndex = match.players?.findIndex(
-      player => player.user._id === userSanityId
-    );
-    
-    if (playerIndex === -1 || playerIndex === undefined) {
-      console.log('User is not a player in this match');
-      return NextResponse.json(
-        { error: 'User is not a player in this match' },
-        { status: 400 }
-      );
-    }
-    
     try {
+      // Get the most up-to-date match data
+      const match = await getMatchById(matchId);
+      
+      if (!match) {
+        console.log('Match not found');
+        return NextResponse.json(
+          { error: 'Match not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Check if user is the creator
+      const isCreator = match.createdBy?._id === userSanityId || match.createdBy?._ref === userSanityId;
+      
+      if (isCreator) {
+        console.log('Match creator cannot leave the match');
+        return NextResponse.json(
+          { error: 'Match creator cannot leave the match. Please cancel the match instead.' },
+          { status: 400 }
+        );
+      }
+      
+      // Check if user is actually a player
+      const playerIndex = match.players?.findIndex(
+        player => player.user._id === userSanityId || player.user._ref === userSanityId
+      );
+      
+      if (playerIndex === -1 || playerIndex === undefined) {
+        console.log('User is not a player in this match');
+        return NextResponse.json(
+          { error: 'User is not a player in this match' },
+          { status: 400 }
+        );
+      }
+      
+      // Check match status
+      if (match.status !== 'scheduled') {
+        console.log(`Cannot leave match with status: ${match.status}`);
+        return NextResponse.json(
+          { error: `Cannot leave a match that is ${match.status}` },
+          { status: 400 }
+        );
+      }
+      
       console.log(`Removing user ${userSanityId} from match ${matchId}`);
       
-      // Remove player from array and decrement filledSlots
+      // Get player key to remove
       const playerKey = match.players[playerIndex]._key;
       
-      const updatedMatch = await client
-        .patch(matchId)
-        .unset([`players[_key=="${playerKey}"]`])
-        .dec({ filledSlots: 1 })
-        .commit();
+      // Begin a transaction
+      const transaction = client.transaction();
+      
+      // Remove player and decrement filledSlots in a transaction
+      transaction.patch(matchId, (patch) => 
+        patch
+          .unset([`players[_key=="${playerKey}"]`])
+          .dec({ filledSlots: 1 })
+      );
+      
+      // Execute the transaction
+      const updatedMatch = await transaction.commit();
       
       console.log('User successfully left match');
       
-      // Potentially send notification via Telegram bot here
+      // Process the queue if there are players waiting
+      if (match.queue && match.queue.length > 0) {
+        console.log('Processing queue after player left');
+        await processMatchQueue(matchId);
+      }
       
       return NextResponse.json({ match: updatedMatch });
     } catch (patchError) {
