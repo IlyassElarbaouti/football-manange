@@ -6,6 +6,7 @@ import { auth } from "@clerk/nextjs/server";
 import { cn } from "@/lib/utils";
 import BackgroundGradient from "@/components/ui/BackgroundGradient";
 import UserSyncIndicator from "@/components/UserSyncIndicator";
+import { ToasterProvider } from "@/components/ToasterProvider";
 
 // Navigation items
 const navigationItems = [
@@ -275,8 +276,10 @@ export default async function DashboardLayout({
           
           {/* User Sync Indicator */}
           <UserSyncIndicator />
+          
+          {/* Toast notifications */}
+          <ToasterProvider />
         </div>
       </div>
     </div>
-  );
-}
+  )}

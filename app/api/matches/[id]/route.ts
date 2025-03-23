@@ -189,12 +189,15 @@ export async function DELETE(
       );
     }
     
-    // Only admins should be able to delete matches
-    // Creators should cancel matches instead
-    if (!user.isAdmin) {
+    // Check if user is the creator or admin
+    const isCreator = match.createdBy?._id === user._id;
+    const isAdmin = user.isAdmin;
+    
+    // Allow match creators to delete their own matches
+    if (!isCreator && !isAdmin) {
       console.log('User not authorized to delete this match');
       return NextResponse.json(
-        { error: 'Only admins can delete matches' },
+        { error: 'Not authorized to delete this match' },
         { status: 403 }
       );
     }

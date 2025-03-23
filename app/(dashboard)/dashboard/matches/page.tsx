@@ -2,11 +2,15 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import MatchesDataGrid from '@/components/matches/MatchesDataGrid';
 import { getAllMatches } from '@/lib/sanity/utils';
+import { updateMatchStatuses } from '@/lib/match-status-updater';
 
 export default async function MatchesPage() {
-  // Fetch matches from Sanity
+  // First update match statuses automatically
+  await updateMatchStatuses();
+  
+  // Then fetch the updated matches
   const matches = await getAllMatches();
-  console.log(`Fetched ${matches?.length || 0} upcoming matches for display`);
+  console.log(`Fetched ${matches?.length || 0} matches for display`);
 
   return (
     <div className="space-y-8">
@@ -21,7 +25,7 @@ export default async function MatchesPage() {
             </h1>
           </div>
           <p className="text-amber-400">
-            View and join scheduled football matches
+            View, join and manage football matches
           </p>
         </div>
         
@@ -52,7 +56,7 @@ export default async function MatchesPage() {
 
       <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-black/60 to-gray-900/60 backdrop-blur-md shadow-xl overflow-hidden">
         <div className="bg-gradient-to-r from-amber-500 to-yellow-500 px-4 py-2 text-lg font-bold text-black">
-          Upcoming Fixtures
+          Match Calendar
         </div>
         <div className="p-4">
           <MatchesDataGrid matches={matches} />

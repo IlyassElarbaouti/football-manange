@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { format } from 'date-fns'; // Direct import from date-fns
@@ -175,10 +174,10 @@ export default async function MatchDetailPage({
               )}
               
               {/* Match Description */}
-              {match.description && (
+              {match.notes && (
                 <div className="mt-4">
                   <Separator className="bg-amber-500/20 mb-4" />
-                  <p className="text-white/80 whitespace-pre-line">{match.description}</p>
+                  <p className="text-white/80 whitespace-pre-line">{match.notes}</p>
                 </div>
               )}
             </div>
@@ -226,7 +225,7 @@ export default async function MatchDetailPage({
                               <Badge className="ml-2 bg-amber-600 text-xs text-white">Organizer</Badge>
                             )}
                           </p>
-                          {player.status === 'confirmed' ? (
+                          {player.confirmed ? (
                             <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
                               Confirmed
                             </Badge>

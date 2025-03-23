@@ -27,7 +27,7 @@ export default function BackgroundGradient() {
   return (
     <div className="fixed inset-0 -z-10">
       {/* Base background */}
-      <div className="absolute inset-0 bg-[url('/images/fifa-bg.jpg')] bg-cover bg-center bg-no-repeat opacity-30" />
+      <div className="absolute inset-0 bg-[url('/images/fifa-bg.webp')] bg-cover bg-center bg-no-repeat opacity-30" />
       
       {/* Dynamic gradient overlay */}
       <div 
