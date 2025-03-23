@@ -25,7 +25,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { UserPlus, UserMinus, Calendar, AlertTriangle, Users, XCircle, Clock } from 'lucide-react';
-import { toast } from '@/components/ui/use-toast';
+import {  useToast} from '@/hooks/use-toast';
 
 interface MatchActionsProps {
   match: Match;
@@ -40,6 +40,8 @@ export default function MatchActions({
   isCreator, 
   isPlayer 
 }: MatchActionsProps) {
+
+  const {toast} = useToast()
   const router = useRouter();
   const [isJoining, setIsJoining] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
