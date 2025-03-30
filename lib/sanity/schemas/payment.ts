@@ -111,7 +111,7 @@ export default {
       const statusIcon = status === 'pending' ? '⏳' : status === 'completed' ? '✅' : '↩️';
       return {
         title: `${user || 'Unknown user'} - ${match || 'Unknown match'}`,
-        subtitle: `${statusIcon} ${amount}₽ paid on ${formattedDate}`,
+        subtitle: `${statusIcon} ${amount}€ paid on ${formattedDate}`,
       };
     },
   },

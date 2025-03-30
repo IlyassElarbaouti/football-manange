@@ -207,7 +207,7 @@ export default function PaymentsPage() {
                     </div>
                     <div>
                       <p className="text-sm text-white/60">Total Paid</p>
-                      <p className="text-2xl font-bold text-white">{currentUserStats.totalPaid}₽</p>
+                      <p className="text-2xl font-bold text-white">{currentUserStats.totalPaid}€</p>
                     </div>
                   </div>
                 </div>
@@ -302,7 +302,7 @@ export default function PaymentsPage() {
                                 <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
                                   <div>
                                     <p className="text-white/50">Amount</p>
-                                    <p className="font-semibold text-white">{payment.amount}₽</p>
+                                    <p className="font-semibold text-white">{payment.amount}€</p>
                                   </div>
                                   <div>
                                     <p className="text-white/50">Method</p>
@@ -366,7 +366,7 @@ export default function PaymentsPage() {
                               <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
                                 <div>
                                   <p className="text-white/50">Amount</p>
-                                  <p className="font-semibold text-white">{payment.amount}₽</p>
+                                  <p className="font-semibold text-white">{payment.amount}€</p>
                                 </div>
                                 <div>
                                   <p className="text-white/50">Method</p>
@@ -413,7 +413,7 @@ export default function PaymentsPage() {
                               <div className="flex justify-between items-start">
                                 <h3 className="font-bold text-white">{match.title}</h3>
                                 <Badge className="bg-blue-500 text-white">
-                                  {amount}₽
+                                  {amount}€
                                 </Badge>
                               </div>
                               
@@ -462,7 +462,7 @@ export default function PaymentsPage() {
                                         Amount
                                       </Label>
                                       <div className="flex h-10 items-center rounded-md border border-amber-500/20 bg-gray-800/50 px-3 text-white">
-                                        {amount}₽
+                                        {amount}€
                                       </div>
                                       <p className="text-xs text-amber-400/80">
                                         Payment amount per player

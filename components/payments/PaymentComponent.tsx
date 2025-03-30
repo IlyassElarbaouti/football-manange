@@ -218,7 +218,7 @@ export default function PaymentComponent({ match, onPaymentSuccess, existingPaym
                 Amount
               </Label>
               <div className="flex h-10 items-center rounded-md border border-amber-500/20 bg-gray-800/50 px-3 text-white">
-                {amount}₽
+                {amount}€
               </div>
               <p className="text-xs text-amber-400/80">
                 Payment amount per player

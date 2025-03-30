@@ -232,7 +232,7 @@ export default async function MatchDetailPage({
               {costPerPlayer && (
                 <div className="mt-6 p-3 rounded-md bg-amber-500/10">
                   <p className="text-white">
-                    Cost per player: <span className="font-bold text-amber-400">{costPerPlayer}₽</span>
+                    Cost per player: <span className="font-bold text-amber-400">{costPerPlayer}€</span>
                   </p>
                 </div>
               )}
@@ -414,7 +414,7 @@ export default async function MatchDetailPage({
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-white/60">Amount</p>
-                    <p className="text-white font-bold text-lg">{payment.amount}₽</p>
+                    <p className="text-white font-bold text-lg">{payment.amount}€</p>
                   </div>
                   
                   <div>
