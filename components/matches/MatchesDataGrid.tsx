@@ -8,7 +8,7 @@ import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Users, Search, Edit, Trash2, Loader2 } from "lucide-react";
+import { MapPin, Calendar, Users, Search, Edit, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,

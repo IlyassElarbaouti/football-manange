@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Heading1 } from '@/components/ui/typography';
 import { notFound } from 'next/navigation';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, ChevronLeft } from 'lucide-react';

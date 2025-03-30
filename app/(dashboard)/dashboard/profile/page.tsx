@@ -2,14 +2,13 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { getUserByClerkId, getUpcomingMatches } from '@/lib/sanity/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent,  CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import ProfileStats from '@/components/profiles/ProfileStats';
-import ProfileEditForm from '@/components/profiles/ProfileEditForm';
 import { Edit, Calendar, Trophy, Clock, MapPin } from 'lucide-react';
 
 export default async function ProfilePage() {

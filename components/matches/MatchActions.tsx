@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
          AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, 
          AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { UserPlus, UserMinus, Clock, DollarSign, Check, AlertTriangle } from 'lucide-react';
+import { UserPlus, UserMinus, Clock, Check, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PaymentComponent from '@/components/payments/PaymentComponent';
 

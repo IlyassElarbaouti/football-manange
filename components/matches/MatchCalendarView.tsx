@@ -8,10 +8,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, MapPin, Clock, Users } from 'lucide-react';
 import { Match } from '@/types/sanity';
-import { format, addMonths, subMonths, isSameDay } from 'date-fns';
+import { format, addMonths, subMonths } from 'date-fns';
 
 interface MatchCalendarViewProps {
   matches: Match[];

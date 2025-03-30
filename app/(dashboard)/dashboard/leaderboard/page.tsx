@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import { getUserByClerkId } from '@/lib/sanity/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Trophy, Users, Award, Star, Medal } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Trophy, Users, Award, Star } from 'lucide-react';
 
 // This would be fetched from an API in a real implementation
 const leaderboardData = [

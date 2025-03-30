@@ -5,11 +5,7 @@ import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-interface ProfileStatsProps {
-  userId: string;
-}
-
-const ProfileStats = ({ userId }: ProfileStatsProps) => {
+const ProfileStats = () => {
   const [loading, setLoading] = useState(true);
   
   // Mock stats for the demo - in a real implementation, these would come from an API
