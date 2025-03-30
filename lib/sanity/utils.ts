@@ -1,3 +1,4 @@
+// lib/sanity/utils.ts
 import { groq } from 'next-sanity';
 import { createClient } from '@sanity/client';
 import { User, Match, Venue, Payment, Achievement, Notification, TelegramSettings } from '@/types/sanity';
@@ -83,7 +84,43 @@ export async function getAllMatches(): Promise<Match[]> {
   try {
     console.log('Fetching all matches from Sanity');
     return serverClient.fetch(
-      groq`*[_type == "match"] | order(date desc)`
+      groq`*[_type == "match"] | order(date desc) {
+        _id,
+        title,
+        date,
+        venue->{
+          name,
+          address,
+          image,
+          hourlyRate,
+          amenities
+        },
+        matchType,
+        totalSlots,
+        filledSlots,
+        totalCost,
+        costPerPlayer,
+        status,
+        createdBy->{
+          _id,
+          name,
+          profileImage
+        },
+        players,
+        queue,
+        hasPayment,
+        paymentConfirmed,
+        paidBy->{
+          _id,
+          name
+        },
+        playDate,
+        timeSlot,
+        matchDetails,
+        notes,
+        visibility,
+        inviteCode
+      }`
     );
   } catch (error) {
     console.error('Error in getAllMatches:', error);
@@ -96,7 +133,35 @@ export async function getUpcomingMatches(): Promise<Match[]> {
     const now = new Date().toISOString();
     console.log('Fetching upcoming matches from Sanity');
     return serverClient.fetch(
-      groq`*[_type == "match" && date > $now && status != "cancelled"] | order(date asc)`,
+      groq`*[_type == "match" && date > $now && status != "cancelled"] | order(date asc) {
+        _id,
+        title,
+        date,
+        venue->{
+          name,
+          address,
+          image,
+          hourlyRate
+        },
+        matchType,
+        totalSlots,
+        filledSlots,
+        totalCost,
+        costPerPlayer,
+        status,
+        createdBy->{
+          _id,
+          name
+        },
+        hasPayment,
+        paymentConfirmed,
+        paidBy->{
+          _id,
+          name
+        },
+        playDate,
+        timeSlot
+      }`,
       { now }
     );
   } catch (error) {
@@ -119,6 +184,12 @@ export async function getMatchById(matchId: string): Promise<Match | null> {
           amenities
         },
         createdBy->{
+          _id,
+          name,
+          profileImage
+        },
+        paidBy->{
+          _id,
           name,
           profileImage
         },
@@ -165,6 +236,78 @@ export async function createMatch(matchData: Omit<Match, '_id' | '_type'>): Prom
     });
   } catch (error) {
     console.error('Error in createMatch:', error);
+    throw error;
+  }
+}
+
+// Payment queries
+export async function getAllPaymentsForMatch(matchId: string): Promise<Payment[]> {
+  try {
+    console.log(`Fetching payments for match: ${matchId}`);
+    return serverClient.fetch(
+      groq`*[_type == "payment" && match._ref == $matchId] {
+        _id,
+        user->{
+          _id,
+          name,
+          email,
+          profileImage
+        },
+        match->{
+          _id,
+          title
+        },
+        amount,
+        date,
+        method,
+        status,
+        notes,
+        playDate,
+        timeSlot,
+        matchDetails
+      }`,
+      { matchId }
+    );
+  } catch (error) {
+    console.error(`Error in getAllPaymentsForMatch for matchId ${matchId}:`, error);
+    throw error;
+  }
+}
+
+export async function getPaymentById(paymentId: string): Promise<Payment | null> {
+  try {
+    console.log(`Fetching payment by ID: ${paymentId}`);
+    return serverClient.fetch(
+      groq`*[_type == "payment" && _id == $paymentId][0] {
+        _id,
+        user->{
+          _id,
+          name,
+          email,
+          profileImage
+        },
+        match->{
+          _id,
+          title,
+          date,
+          venue->{
+            name,
+            address
+          }
+        },
+        amount,
+        date,
+        method,
+        status,
+        notes,
+        playDate,
+        timeSlot,
+        matchDetails
+      }`,
+      { paymentId }
+    );
+  } catch (error) {
+    console.error(`Error in getPaymentById for paymentId ${paymentId}:`, error);
     throw error;
   }
 }

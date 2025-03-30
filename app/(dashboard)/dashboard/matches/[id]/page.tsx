@@ -1,3 +1,4 @@
+// app/(dashboard)/dashboard/matches/[id]/page.tsx
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
@@ -5,9 +6,10 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { MapPin, Calendar, Clock, MessageCircle, ChevronLeft, Users } from 'lucide-react';
-import { getMatchById, getUserByClerkId } from '@/lib/sanity/utils';
+import { MapPin, Calendar, Clock, MessageCircle, ChevronLeft, Users, CreditCard, AlertCircle, CheckCircle } from 'lucide-react';
+import { getMatchById, getUserByClerkId, getAllPaymentsForMatch } from '@/lib/sanity/utils';
 import MatchActions from '@/components/matches/MatchActions';
 import MatchFieldVisualization from '@/components/matches/MatchFieldVisualization';
 
@@ -34,10 +36,19 @@ export default async function MatchDetailPage({
     notFound();
   }
   
-  // Parse the date
+  // Get payment information for this match
+  const payments = await getAllPaymentsForMatch(id);
+  const payment = payments && payments.length > 0 ? payments[0] : null;
+  
+  // Parse the match date
   const matchDate = new Date(match.date);
   const formattedDate = format(matchDate, 'EEEE, MMMM d, yyyy');
   const formattedTime = format(matchDate, 'h:mm a');
+  
+  // Get confirmed play date and time if available
+  const hasConfirmedDetails = match.playDate && match.timeSlot;
+  const playDate = match.playDate ? new Date(match.playDate) : null;
+  const formattedPlayDate = playDate ? format(playDate, 'EEEE, MMMM d, yyyy') : null;
   
   // Check if the current user is the creator
   const isCreator = match.createdBy?._id === user._id;
@@ -47,10 +58,14 @@ export default async function MatchDetailPage({
     player.user._id === user._id
   );
   
+  // Check if this user paid for the match
+  const isPayer = match.paidBy?._id === user._id;
+  
   // Calculate the cost per player if available
-  const costPerPlayer = match.totalCost && match.totalSlots 
-    ? Math.ceil(match.totalCost / match.totalSlots)
-    : match.costPerPlayer || null;
+  const costPerPlayer = match.costPerPlayer || 
+    (match.totalCost && match.totalSlots 
+      ? Math.ceil(match.totalCost / match.totalSlots)
+      : null);
   
   return (
     <div className="space-y-8">
@@ -102,6 +117,29 @@ export default async function MatchDetailPage({
         </div>
       </div>
       
+      {/* Payment Status Banner */}
+      {match.hasPayment && (
+        <div className={`p-4 rounded-lg ${match.paymentConfirmed ? 'bg-green-500/10 border border-green-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+          <div className="flex items-center">
+            {match.paymentConfirmed ? 
+              <CheckCircle className="h-5 w-5 text-green-500 mr-3" /> : 
+              <CreditCard className="h-5 w-5 text-amber-400 mr-3" />
+            }
+            <div>
+              <h3 className="font-bold text-white">
+                {match.paymentConfirmed ? "Payment Confirmed" : "Payment Recorded"}
+              </h3>
+              <p className="text-white/70">
+                {match.paidBy?.name || "Someone"} has {match.paymentConfirmed ? "paid" : "recorded payment"} for this match
+                {hasConfirmedDetails && (
+                  <span> and set the match time for <span className="text-amber-400">{formattedPlayDate} at {match.timeSlot}</span></span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Match Field Visualization */}
       <MatchFieldVisualization match={match} />
       
@@ -115,12 +153,34 @@ export default async function MatchDetailPage({
             </div>
             
             <div className="p-4 space-y-4">
-              {/* Date and Time */}
+              {/* Confirmed Date and Time - Show if available */}
+              {hasConfirmedDetails && (
+                <div className="p-3 bg-amber-500/10 rounded-md mb-4">
+                  <h3 className="font-semibold text-white flex items-center mb-2">
+                    <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                    Confirmed Match Time
+                  </h3>
+                  <div className="flex items-start ml-6">
+                    <div>
+                      <p className="text-white font-medium">{formattedPlayDate}</p>
+                      <div className="flex items-center mt-1">
+                        <Clock className="h-4 w-4 text-amber-400 mr-1" />
+                        <p className="text-white/70">{match.timeSlot}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Tentative Date and Time */}
               <div className="flex items-start">
                 <div className="bg-amber-500/10 p-2 rounded-md mr-3">
                   <Calendar className="h-5 w-5 text-amber-400" />
                 </div>
                 <div>
+                  <p className="text-white font-medium">
+                    {hasConfirmedDetails ? "Originally Planned Date" : "Planned Date"}
+                  </p>
                   <p className="text-white font-medium">{formattedDate}</p>
                   <div className="flex items-center mt-1">
                     <Clock className="h-4 w-4 text-amber-400 mr-1" />
@@ -184,6 +244,22 @@ export default async function MatchDetailPage({
                   <p className="text-white/80 whitespace-pre-line">{match.notes}</p>
                 </div>
               )}
+              
+              {/* Additional Match Details from payment */}
+              {match.matchDetails && (
+                <div className="mt-4">
+                  <Separator className="bg-amber-500/20 mb-4" />
+                  <h3 className="text-white font-medium mb-2">Additional Details:</h3>
+                  <div className="p-3 bg-gray-800/50 rounded-md">
+                    <p className="text-white/80 whitespace-pre-line">{match.matchDetails}</p>
+                    {match.paidBy && (
+                      <div className="mt-2 text-right text-xs text-white/60">
+                        Added by {match.paidBy.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -193,6 +269,7 @@ export default async function MatchDetailPage({
             user={user}
             isCreator={isCreator}
             isPlayer={isPlayer}
+            payment={payment}
           />
         </div>
         
@@ -294,6 +371,91 @@ export default async function MatchDetailPage({
               </div>
             </div>
           </div>
+          
+          {/* Payment Details Card - If payment exists */}
+          {payment && (
+            <Card className="overflow-hidden border-amber-500/20 bg-black/50 backdrop-blur-sm">
+              <div className={`px-4 py-3 ${payment.status === 'completed' ? 'bg-gradient-to-r from-green-900 to-gray-900' : 'bg-gradient-to-r from-amber-950 to-gray-900'}`}>
+                <h2 className="text-lg font-bold text-white flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2 text-amber-400" />
+                  Payment Details
+                </h2>
+              </div>
+              
+              <CardContent className="p-4 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm text-white/60">Paid by</p>
+                    <div className="flex items-center mt-1">
+                      <Avatar className="h-6 w-6 mr-2">
+                        {payment.user?.profileImage ? (
+                          <AvatarImage src={payment.user.profileImage} alt={payment.user.name} />
+                        ) : (
+                          <AvatarFallback className="bg-amber-800/50 text-amber-200">
+                            {payment.user?.name?.charAt(0) || 'U'}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                      <span className="text-white font-medium">{payment.user?.name}</span>
+                    </div>
+                  </div>
+                  
+                  <Badge 
+                    className={`
+                      ${payment.status === 'pending' ? 'bg-yellow-500 text-black' : 
+                        payment.status === 'completed' ? 'bg-green-500 text-white' : 
+                        'bg-red-500 text-white'}
+                    `}
+                  >
+                    {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+                  </Badge>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-white/60">Amount</p>
+                    <p className="text-white font-bold text-lg">{payment.amount}₽</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-white/60">Payment Method</p>
+                    <p className="text-white capitalize">{payment.method}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-white/60">Payment Date</p>
+                    <p className="text-white">{format(new Date(payment.date), 'PP')}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-white/60">Payment Time</p>
+                    <p className="text-white">{format(new Date(payment.date), 'p')}</p>
+                  </div>
+                </div>
+                
+                {payment.notes && (
+                  <div>
+                    <p className="text-white/60 mb-1">Payment Notes</p>
+                    <p className="text-white/80 bg-gray-800/50 p-2 rounded">{payment.notes}</p>
+                  </div>
+                )}
+                
+                {/* If this user made the payment, show edit button */}
+                {isPayer && (
+                  <div className="mt-4">
+                    <Button 
+                      asChild
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Link href={`/dashboard/payments?edit=${payment._id}`}>
+                        Edit Payment Details
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
           
           {/* Weather Card */}
           <div className="rounded-lg border border-amber-500/20 bg-black/50 backdrop-blur-sm overflow-hidden">

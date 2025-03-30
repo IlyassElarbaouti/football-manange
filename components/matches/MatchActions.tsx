@@ -1,15 +1,16 @@
-// components/matches/MatchActions.tsx (partial improvements)
+// Enhanced MatchActions.tsx with payment integration
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Match } from '@/types/sanity';
+import { User, Match, Payment } from '@/types/sanity';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
          AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, 
          AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { UserPlus, UserMinus, Clock } from 'lucide-react';
+import { UserPlus, UserMinus, Clock, DollarSign, Check, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import PaymentComponent from '@/components/payments/PaymentComponent';
 
 interface MatchActionsProps {
   match: Match;
@@ -32,11 +33,43 @@ export default function MatchActions({
     isPlayer: boolean;
     isInQueue: boolean;
     filledSlots: number;
+    hasPaid: boolean;
   }>({
     isPlayer,
     isInQueue: match.queue?.some(queuedUser => queuedUser.user._ref === user._id) || false,
-    filledSlots: match.filledSlots
+    filledSlots: match.filledSlots,
+    hasPaid: false
   });
+  
+  // Fetch payment status for this match
+  useEffect(() => {
+    const checkPaymentStatus = async () => {
+      try {
+        // Only check if user is a player
+        if (!optimisticState.isPlayer) return;
+        
+        const response = await fetch('/api/payments');
+        if (!response.ok) {
+          throw new Error('Failed to fetch payments');
+        }
+        
+        const data = await response.json();
+        const matchPayments = data.payments.filter((payment: Payment) => 
+          payment.match._ref === match._id && 
+          (payment.status === 'completed' || payment.status === 'pending')
+        );
+        
+        setOptimisticState(prev => ({
+          ...prev,
+          hasPaid: matchPayments.length > 0
+        }));
+      } catch (error) {
+        console.error('Error checking payment status:', error);
+      }
+    };
+    
+    checkPaymentStatus();
+  }, [match._id, optimisticState.isPlayer, user._id]);
 
   // Check if match is full
   const isFull = optimisticState.filledSlots >= match.totalSlots;
@@ -85,7 +118,8 @@ export default function MatchActions({
         setOptimisticState({
           isPlayer,
           isInQueue: match.queue?.some(queuedUser => queuedUser.user._ref === user._id) || false,
-          filledSlots: match.filledSlots
+          filledSlots: match.filledSlots,
+          hasPaid: optimisticState.hasPaid
         });
         
         throw new Error(data.error || 'Failed to join match');
@@ -160,7 +194,8 @@ export default function MatchActions({
         setOptimisticState({
           isPlayer,
           isInQueue: match.queue?.some(queuedUser => queuedUser.user._ref === user._id) || false,
-          filledSlots: match.filledSlots
+          filledSlots: match.filledSlots,
+          hasPaid: optimisticState.hasPaid
         });
         
         throw new Error(data.error || 'Failed to leave match');
@@ -184,6 +219,15 @@ export default function MatchActions({
     } finally {
       setIsLeaving(false);
     }
+  };
+  
+  // Handle payment success
+  const handlePaymentSuccess = () => {
+    setOptimisticState(prev => ({
+      ...prev,
+      hasPaid: true
+    }));
+    router.refresh();
   };
 
   // If match is not scheduled, show appropriate message
@@ -236,6 +280,26 @@ export default function MatchActions({
           </div>
         </div>
         
+        {/* Payment information for players */}
+        {(optimisticState.isPlayer || isCreator) && (
+          <div className={`p-3 rounded-md mb-2 flex items-start ${optimisticState.hasPaid ? 'bg-green-500/10 border-l-4 border-green-500' : 'bg-amber-500/10 border-l-4 border-amber-500'}`}>
+            <div className="flex items-start">
+              <div>
+                <p className="text-white font-medium">
+                  {optimisticState.hasPaid 
+                    ? "Payment recorded for this match" 
+                    : "Payment required for this match"}
+                </p>
+                <p className="text-white/70 text-sm mt-1">
+                  {optimisticState.hasPaid 
+                    ? "Your payment is being processed or has been confirmed" 
+                    : `Cost per player: ${match.costPerPlayer || 'To be determined'}`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="space-y-3">
           <div className="flex flex-col space-y-3">
             {/* Join match button */}
@@ -269,6 +333,27 @@ export default function MatchActions({
               </Button>
             )}
             
+            {/* Payment button - visible to players who haven't paid */}
+            {optimisticState.isPlayer && !optimisticState.hasPaid && (
+              <div>
+                <PaymentComponent 
+                  match={match} 
+                  onPaymentSuccess={handlePaymentSuccess}
+                />
+              </div>
+            )}
+            
+            {/* Payment status - visible to players who have paid */}
+            {optimisticState.isPlayer && optimisticState.hasPaid && (
+              <Button
+                disabled
+                className="w-full bg-green-600 hover:bg-green-700 text-white cursor-default"
+              >
+                <Check className="mr-2 h-4 w-4" />
+                Payment Recorded
+              </Button>
+            )}
+            
             {/* Leave match / waiting list button */}
             {(optimisticState.isPlayer && !isCreator) || optimisticState.isInQueue ? (
               <AlertDialog>
@@ -288,7 +373,9 @@ export default function MatchActions({
                     </AlertDialogTitle>
                     <AlertDialogDescription className="text-white/70">
                       {optimisticState.isPlayer 
-                        ? "Your spot will be given to the next person in the waiting list."
+                        ? optimisticState.hasPaid 
+                          ? "Your payment record will remain, but you'll give up your spot."
+                          : "Your spot will be given to the next person in the waiting list."
                         : "You'll lose your current position in the queue."}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
@@ -306,7 +393,79 @@ export default function MatchActions({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-            ):""}
+            ) : null}
+            
+            {/* Match creation actions - only visible to creator */}
+            {isCreator && (
+              <div className="mt-4 space-y-2">
+                <Button
+                  asChild
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <a href={`/dashboard/matches/${match._id}/edit`}>
+                    Edit Match Details
+                  </a>
+                </Button>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full border-red-500/20 bg-red-950/10 hover:bg-red-950/20 text-red-400 hover:text-red-300"
+                    >
+                      <AlertTriangle className="mr-2 h-4 w-4" />
+                      Cancel Match
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="border-amber-500/20 bg-gray-900">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-white">
+                        Cancel this match?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="text-white/70">
+                        This will notify all participants that the match has been cancelled.
+                        Any recorded payments will need to be refunded manually.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="border-amber-500/20 bg-gray-800 text-white hover:bg-gray-700 hover:text-white">
+                        Go Back
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          // Cancel match logic
+                          fetch(`/api/matches/${match._id}`, {
+                            method: 'PATCH',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              status: 'cancelled'
+                            }),
+                          }).then(() => {
+                            toast({
+                              title: "Match cancelled",
+                              description: "All participants have been notified.",
+                            });
+                            router.refresh();
+                          }).catch(error => {
+                            console.error('Error cancelling match:', error);
+                            toast({
+                              title: "Failed to cancel match",
+                              description: "Please try again later",
+                              variant: "destructive",
+                            });
+                          });
+                        }}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Cancel Match
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
           </div>
         </div>
       </div>

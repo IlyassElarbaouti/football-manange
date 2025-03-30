@@ -1,5 +1,5 @@
 // lib/sanity/schemas/match.ts
- const match = {
+const match = {
   name: 'match',
   title: 'Match',
   type: 'document',
@@ -171,6 +171,46 @@
       ],
       description: 'Users waiting to join if spots become available',
     },
+    // Payment-related fields
+    {
+      name: 'paidBy',
+      title: 'Paid By',
+      type: 'reference',
+      to: [{type: 'user'}],
+      description: 'User who paid for the match',
+    },
+    {
+      name: 'hasPayment',
+      title: 'Has Payment',
+      type: 'boolean',
+      description: 'Whether a payment has been recorded for this match',
+      initialValue: false,
+    },
+    {
+      name: 'paymentConfirmed',
+      title: 'Payment Confirmed',
+      type: 'boolean',
+      description: 'Whether the payment has been confirmed',
+      initialValue: false,
+    },
+    {
+      name: 'playDate',
+      title: 'Play Date',
+      type: 'date',
+      description: 'The confirmed date when the match will be played',
+    },
+    {
+      name: 'timeSlot',
+      title: 'Time Slot',
+      type: 'string',
+      description: 'The confirmed time when the match will be played',
+    },
+    {
+      name: 'matchDetails',
+      title: 'Match Details',
+      type: 'text',
+      description: 'Additional details about the match provided by the person who paid',
+    },
     {
       name: 'weather',
       title: 'Weather',
@@ -227,12 +267,14 @@
       title: 'title',
       date: 'date',
       venue: 'venue.name',
+      hasPaid: 'hasPayment',
     },
-    prepare({title, date, venue}) {
+    prepare({title, date, venue, hasPaid}) {
       const formattedDate = date ? new Date(date).toLocaleDateString() : '';
+      const paymentStatus = hasPaid ? '💰 Paid' : '⏳ Not paid';
       return {
         title,
-        subtitle: `${formattedDate} at ${venue || 'Unknown venue'}`,
+        subtitle: `${formattedDate} at ${venue || 'Unknown venue'} | ${paymentStatus}`,
       };
     },
   },
